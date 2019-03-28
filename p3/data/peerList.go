@@ -5,41 +5,132 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
-	"strings"
 	"sync"
 )
 
 type PeerList struct {
-	selfId int32
-	peerMap map[string]int32
+	selfId    int32
+	peerMap   map[string]int32
 	maxLength int32
-	mux sync.Mutex
+	mux       sync.Mutex
 }
 
-func NewPeerList(id int32, maxLength int32) PeerList {}
+type PeerJson struct {
+	SelfId    int32            `json:"selfId"`
+	MaxLength int32            `json:"maxLength"`
+	PeerMap   map[string]int32 `json:"peerMap"`
+}
 
-func(peers *PeerList) Add(addr string, id int32) {}
+func NewPeerList(id int32, maxLength int32) PeerList {
+	//initial function
+	peerMap := make(map[string]int32)
+	return PeerList{selfId: id, peerMap: peerMap, maxLength: maxLength}
+}
 
-func(peers *PeerList) Delete(addr string) {}
+func (peers *PeerList) Add(addr string, id int32) {
+	peers.mux.Lock()
+	if id != peers.selfId {
+		peers.peerMap[addr] = id
+	}
+	peers.mux.Unlock()
+}
 
-func(peers *PeerList) Rebalance() {}
+func (peers *PeerList) Delete(addr string) {
+	peers.mux.Lock()
+	delete(peers.peerMap, addr)
+	peers.mux.Unlock()
+}
 
-func(peers *PeerList) Show() string {}
+func (peers *PeerList) Rebalance() {
+	peers.mux.Lock()
+	var closest []int
 
-func(peers *PeerList) Register(id int32) {
+	for _, v := range peers.peerMap {
+		closest = append(closest, int(v))
+	}
+	closest = append(closest, int(peers.selfId))
+	sort.Ints(closest)
+
+	idx := -1
+	for index, value := range closest {
+		if value == int(peers.selfId) {
+			idx = index
+		}
+	}
+
+	distance := make(map[int]int)
+
+	for index, value := range closest {
+		mindis := min(Abs(index-idx), Abs(len(closest)-Abs(index-idx)))
+
+		distance[value] = mindis
+	}
+
+	for k, v := range peers.peerMap {
+		if distance[int(v)] > int(peers.maxLength/2) {
+			delete(peers.peerMap, k)
+		}
+	}
+	peers.mux.Unlock()
+}
+
+func Abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func (peers *PeerList) Show() string {
+	peers.mux.Lock()
+	defer peers.mux.Unlock()
+	peerJson := PeerJson{peers.selfId, peers.maxLength, peers.peerMap}
+	s, _ := json.Marshal(peerJson)
+	return string(s)
+}
+
+func (peers *PeerList) Register(id int32) {
+	//set id
+	peers.mux.Lock()
+	defer peers.mux.Unlock()
 	peers.selfId = id
 	fmt.Printf("SelfId=%v\n", id)
 }
 
-func(peers *PeerList) Copy() map[string]int32 {}
+func (peers *PeerList) Copy() map[string]int32 {
+	// deep copy of the map
+	peers.mux.Lock()
+	defer peers.mux.Unlock()
+	return peers.peerMap
+}
 
-func(peers *PeerList) GetSelfId() int32 {
+func (peers *PeerList) GetSelfId() int32 {
 	return peers.selfId
 }
 
-func(peers *PeerList) PeerMapToJson() (string, error) {}
+func (peers *PeerList) PeerMapToJson() (string, error) {
+	s, err := json.Marshal(peers.peerMap)
+	return string(s), err
+}
 
-func(peers *PeerList) InjectPeerMapJson(peerMapJsonStr string, selfAddr string) {}
+func (peers *PeerList) InjectPeerMapJson(peerMapJsonStr string, selfAddr string) {
+	// insert everything in peerMapJsonStr into the peer map
+	// remove the selfAddr, selfAddr is the current node address
+	var peerMap map[string]int32
+	json.Unmarshal([]byte(peerMapJsonStr), &peerMap)
+
+	for addr, id := range peerMap {
+		peers.peerMap[addr] = id
+	}
+	delete(peers.peerMap, selfAddr)
+}
 
 func TestPeerListRebalance() {
 	peers := NewPeerList(5, 4)
