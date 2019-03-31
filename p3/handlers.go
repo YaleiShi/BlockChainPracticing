@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"reflect"
 	"strconv"
 	"time"
@@ -17,38 +18,65 @@ import (
 
 var TA_SERVER = "http://localhost:6688"
 var REGISTER_SERVER = TA_SERVER + "/peer"
-var SELF_ADDR = "http://localhost:6680"
+var SELF_ADDR string
+var SELF_ID int32
 var BC_DOWNLOAD_SERVER = FIRST_ADDR + "/upload"
 var FIRST_ADDR = "http://localhost:6686"
-var FIRST_ID = int32(1)
+var FIRST_ID = int32(6686)
 
 var SBC data.SyncBlockChain
 var Peers data.PeerList
 var ifStarted bool
 
-func init() {
+func Init() {
 	// This function will be executed before everything else.
 	// Do some initialization here.
+	if len(os.Args) > 1 {
+		port := os.Args[1]
+		portNum, err := strconv.Atoi(port)
+		if err == nil {
+			SELF_ID = int32(portNum)
+			SELF_ADDR = "http://localhost:" + port
+		} else {
+			SELF_ID = 6686
+			SELF_ADDR = "http://localhost:6686"
+		}
+	} else {
+		SELF_ID = 6686
+		SELF_ADDR = "http://localhost:6686"
+	}
 	SBC = data.NewBlockChain()
-	Peers = data.NewPeerList(-1, 32)
+	Peers = data.NewPeerList(SELF_ID, 32)
 	ifStarted = false
 }
 
 // Register ID, download BlockChain, start HeartBeat
 func Start(w http.ResponseWriter, r *http.Request) {
-	// start the logic
-	Peers = data.NewPeerList(2, 32)
-	SBC = data.NewBlockChain()
-	//Register()
-	// first node start
+	if len(os.Args) > 1 {
+		fmt.Println("input port: ", os.Args[1])
+	}
+	Init()
+	if SELF_ID == 6686 {
+		startFirstNode()
+	} else {
+		startAfterNode()
+	}
+}
 
-	// other node start
+func startFirstNode() {
+	//Register()
+	ifStarted = true
+	StartHeartBeat()
+}
+
+func startAfterNode() {
+	//Register()
 	Download()
 	Peers.Add(FIRST_ADDR, FIRST_ID)
 	peerMapJson, _ := Peers.PeerMapToJson()
 	firstHB := data.NewHeartBeatData(false, Peers.GetSelfId(), "", peerMapJson, SELF_ADDR)
 	ForwardHeartBeat(firstHB)
-	// then
+
 	ifStarted = true
 	StartHeartBeat()
 }
