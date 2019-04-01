@@ -25,7 +25,7 @@ func PrepareHeartBeatData(sbc *SyncBlockChain, selfId int32, peerMapJson string,
 	ifNew := decideIfNew()
 	var blockJson string
 	if ifNew {
-		mpt := defaultMPT()
+		mpt := DefaultMPT()
 		newBlock := sbc.GenBlock(mpt)
 		blockJson = newBlock.EncodeToJSON()
 	}
@@ -37,7 +37,7 @@ func decideIfNew() bool {
 	return rand.Float32() < 0.5
 }
 
-func defaultMPT() p1.MerklePatriciaTrie {
+func DefaultMPT() p1.MerklePatriciaTrie {
 	mpt := new(p1.MerklePatriciaTrie)
 	mpt.Initial()
 	mpt.Insert("p", "apple")

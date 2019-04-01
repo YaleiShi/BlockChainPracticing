@@ -66,6 +66,7 @@ func Start(w http.ResponseWriter, r *http.Request) {
 func startFirstNode() {
 	//Register()
 	ifStarted = true
+	SBC.GenBlock(data.DefaultMPT())
 	StartHeartBeat()
 }
 
@@ -208,11 +209,11 @@ func ForwardHeartBeat(heartBeatData data.HeartBeatData) {
 	heartBeatJson, _ := json.Marshal(heartBeatData)
 
 	for addr, _ := range peerMap {
-		_, err := http.Post(addr+request, "application/json", bytes.NewBuffer(heartBeatJson))
+		resp, err := http.Post(addr+request, "application/json", bytes.NewBuffer(heartBeatJson))
 		if err != nil {
 			log.Fatal(err)
 		}
-
+		defer resp.Body.Close()
 	}
 }
 
